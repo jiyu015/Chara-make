@@ -1,1 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Chara Make</title>
 
+<style>
+body{
+font-family:sans-serif;
+text-align:center;
+background:#f5f5f5;
+}
+
+canvas{
+border:2px solid #333;
+image-rendering:pixelated;
+margin-top:20px;
+}
+
+button{
+padding:10px 20px;
+font-size:16px;
+margin:10px;
+cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<h1>キャラメーカー</h1>
+<p>画像をドット絵に変換します</p>
+
+<input type="file" id="upload">
+
+<br>
+
+<canvas id="canvas" width="128" height="128"></canvas>
+
+<br>
+
+<button onclick="pixelate()">ドット絵にする</button>
+
+<script>
+
+let img = new Image()
+
+document.getElementById("upload").onchange = function(e){
+
+const file = e.target.files[0]
+const reader = new FileReader()
+
+reader.onload = function(event){
+img.src = event.target.result
+}
+
+reader.readAsDataURL(file)
+
+}
+
+function pixelate(){
+
+const canvas = document.getElementById("canvas")
+const ctx = canvas.getContext("2d")
+
+ctx.clearRect(0,0,canvas.width,canvas.height)
+
+const size = 16
+
+ctx.drawImage(img,0,0,canvas.width,canvas.height)
+
+for(let y=0;y<canvas.height;y+=size){
+for(let x=0;x<canvas.width;x+=size){
+
+const data = ctx.getImageData(x,y,1,1).data
+ctx.fillStyle = `rgb(${data[0]},${data[1]},${data[2]})`
+ctx.fillRect(x,y,size,size)
+
+}
+}
+
+}
+
+</script>
+
+</body>
+</html>
