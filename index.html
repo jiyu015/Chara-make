@@ -2,84 +2,89 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Chara Make</title>
+<title>Random Pixel Character</title>
 
 <style>
+
 body{
 font-family:sans-serif;
 text-align:center;
-background:#f5f5f5;
+background:#eee;
 }
 
-canvas{
-border:2px solid #333;
+.character{
+position:relative;
+width:128px;
+height:128px;
+margin:auto;
 image-rendering:pixelated;
-margin-top:20px;
+}
+
+.character img{
+position:absolute;
+width:128px;
+height:128px;
+left:0;
+top:0;
+image-rendering:pixelated;
 }
 
 button{
+font-size:18px;
 padding:10px 20px;
-font-size:16px;
-margin:10px;
-cursor:pointer;
+margin-top:20px;
 }
+
 </style>
 </head>
 
 <body>
 
-<h1>キャラメーカー</h1>
-<p>画像をドット絵に変換します</p>
+<h1>32px キャラメーカー</h1>
 
-<input type="file" id="upload">
+<div class="character">
 
-<br>
+<img id="body">
+<img id="hair">
+<img id="eyes">
 
-<canvas id="canvas" width="128" height="128"></canvas>
+</div>
 
-<br>
-
-<button onclick="pixelate()">ドット絵にする</button>
+<button onclick="make()">ランダム生成</button>
 
 <script>
 
-let img = new Image()
+const bodyParts=[
+"parts/body/body1.png",
+"parts/body/body2.png",
+"parts/body/body3.png"
+]
 
-document.getElementById("upload").onchange = function(e){
+const hairParts=[
+"parts/hair/hair1.png",
+"parts/hair/hair2.png",
+"parts/hair/hair3.png"
+]
 
-const file = e.target.files[0]
-const reader = new FileReader()
+const eyesParts=[
+"parts/eyes/eyes1.png",
+"parts/eyes/eyes2.png",
+"parts/eyes/eyes3.png"
+]
 
-reader.onload = function(event){
-img.src = event.target.result
+function rand(arr){
+return arr[Math.floor(Math.random()*arr.length)]
 }
 
-reader.readAsDataURL(file)
+function make(){
+
+document.getElementById("body").src=rand(bodyParts)
+document.getElementById("hair").src=rand(hairParts)
+document.getElementById("eyes").src=rand(eyesParts)
 
 }
 
-function pixelate(){
-
-const canvas = document.getElementById("canvas")
-const ctx = canvas.getContext("2d")
-
-ctx.clearRect(0,0,canvas.width,canvas.height)
-
-const size = 16
-
-ctx.drawImage(img,0,0,canvas.width,canvas.height)
-
-for(let y=0;y<canvas.height;y+=size){
-for(let x=0;x<canvas.width;x+=size){
-
-const data = ctx.getImageData(x,y,1,1).data
-ctx.fillStyle = `rgb(${data[0]},${data[1]},${data[2]})`
-ctx.fillRect(x,y,size,size)
-
-}
-}
-
-}
+make()
 
 </script>
 
