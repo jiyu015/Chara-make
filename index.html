@@ -181,7 +181,7 @@
   /* モード選択 */
   .mode-selector {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 12px;
     margin-bottom: 32px;
   }
@@ -242,6 +242,26 @@
     color: #fff;
     box-shadow: 0 0 20px var(--snes-purple);
   }
+
+  .mode-btn.konami { border-color: #00BFFF; box-shadow: 4px 4px 0 #00BFFF; color: #00BFFF; }
+  .mode-btn.konami:hover, .mode-btn.konami.active { background: #00BFFF; color: #000; box-shadow: 0 0 20px #00BFFF; }
+
+  /* ダウンロードセクション */
+  .download-section { display: none; margin-bottom: 0; }
+  .download-section.show { display: block; }
+  .download-format { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .fmt-btn {
+    flex: 1; min-width: 70px;
+    padding: 10px 6px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    border: 2px solid rgba(139,172,15,0.4);
+    background: rgba(0,0,0,0.5);
+    color: rgba(139,172,15,0.7);
+    cursor: pointer; text-align: center; transition: all 0.05s;
+  }
+  .fmt-btn.active, .fmt-btn:hover { border-color: var(--gb-green); background: var(--gb-green); color: #000; box-shadow: 0 0 10px rgba(139,172,15,0.4); }
+  .fmt-btn:active { transform: translate(2px,2px); }
 
   /* スペック表示 */
   .specs-panel {
@@ -612,7 +632,7 @@
     .upload-zone .filename { font-size: 16px; }
 
     .mode-selector {
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(2, 1fr);
       gap: 8px;
       margin-bottom: 20px;
     }
@@ -764,6 +784,11 @@
       <span>SUPER NES<br>スーファミ<br>
       <small style="font-size:6px;opacity:0.6">SPC700 / 8ch</small></span>
     </button>
+    <button class="mode-btn konami" data-mode="konami" onclick="selectMode('konami', this)">
+      <span class="mode-icon">🔷</span>
+      <span>KONAMI風<br>コナミ風<br>
+      <small style="font-size:6px;opacity:0.6">MSX / arcade</small></span>
+    </button>
   </div>
 
   <!-- スペック表示 -->
@@ -833,9 +858,18 @@
   <div class="channels" id="channelMeters"></div>
 
   <!-- 試し聴きボタン -->
-  <button class="preview-btn" id="previewBtn" onclick="playPreview()" disabled>
-    🎮 試し聴き（3秒プレビュー）
-  </button>
+  <div style="margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+      <button class="preview-btn" id="previewBtn" onclick="playPreview()" disabled style="margin-bottom:0;flex:1;">
+        🎮 試し聴き
+      </button>
+      <div style="display:flex;align-items:center;gap:8px;white-space:nowrap;">
+        <span style="font-size:6px;color:rgba(255,255,255,0.5);font-family:'Press Start 2P',monospace;">SEC</span>
+        <input type="range" class="pixel-slider" id="previewSec" min="5" max="30" value="10" style="width:80px;" oninput="document.getElementById('previewSecVal').textContent=this.value+'s'">
+        <span class="slider-val" id="previewSecVal" style="font-size:16px;min-width:32px;">10s</span>
+      </div>
+    </div>
+  </div>
 
   <!-- 再生コントロール -->
   <div class="playback">
@@ -844,14 +878,21 @@
     <button class="play-btn" id="stopBtn" onclick="stopAll()" disabled>■ 停止</button>
   </div>
 
-  <!-- ダウンロード -->
-  <button class="download-btn" id="downloadBtn" onclick="downloadAudio()">
-    ⬇ DOWNLOAD / WAVダウンロード
-  </button>
+  <!-- ダウンロードセクション -->
+  <div class="download-section" id="downloadSection">
+    <div class="download-format">
+      <button class="fmt-btn active" id="fmt-wav" onclick="setFmt('wav')">WAV</button>
+      <button class="fmt-btn" id="fmt-mp3" onclick="setFmt('mp3')">MP3風WAV</button>
+      <button class="fmt-btn" id="fmt-midi" onclick="setFmt('midi')">MIDI</button>
+    </div>
+    <button class="download-btn show" id="downloadBtn" onclick="downloadAudio()">
+      ⬇ DOWNLOAD / ダウンロード
+    </button>
+  </div>
 
   <footer class="footer">
-    <div>CHIPTUNE CONVERTER v1.0 — Web Audio API powered</div>
-    <div>NES: 2A03 | GB: DMG-01 | SNES: SPC700 emulation</div>
+    <div>CHIPTUNE CONVERTER v1.1 — Web Audio API powered</div>
+    <div>NES / GB / SNES / KONAMI風 emulation</div>
     <div>© 2024 — INSERT COIN TO CONTINUE ★</div>
   </footer>
 
@@ -908,6 +949,19 @@ const SPECS = {
     ],
     channels: ['CH1', 'CH2', 'CH3', 'CH4', 'CH5', 'CH6', 'CH7', 'CH8'],
     color: '#7B00FF'
+  },
+  konami: {
+    title: '▌ KONAMI風 MSX/ARCADE SPECS',
+    rows: [
+      ['スタイル', 'MSX / アーケード基板風'],
+      ['チャンネル数', '3ch PSG (AY-3-8910風)'],
+      ['特徴', 'アルペジオ + ハードサチュレーション'],
+      ['ビット深度', '4bit (PSG音量テーブル)'],
+      ['エフェクト', 'ピッチLFO + リングモジュレーション'],
+      ['雰囲気', 'グラディウス / 魂斗羅 / 悪魔城風'],
+    ],
+    channels: ['PSG-A', 'PSG-B', 'PSG-C'],
+    color: '#00BFFF'
   }
 };
 
@@ -1009,19 +1063,19 @@ async function playPreview() {
   if (btn.classList.contains('playing')) {
     stopAll();
     btn.classList.remove('playing');
-    btn.textContent = '🎮 試し聴き（3秒プレビュー）';
+    btn.textContent = '🎮 試し聴き';
     return;
   }
 
   stopAll();
   btn.classList.add('playing');
   btn.textContent = '⏹ 停止';
-  addLog('▶ 試し聴き中（3秒）...');
 
-  // 最初の3秒だけ切り出してチップチューン変換
+  const previewSecs = Math.min(parseInt(document.getElementById('previewSec').value) || 10, originalBuffer.duration);
+  addLog(`▶ 試し聴き中（${previewSecs}秒）...`);
+
   const ctx = getAudioCtx();
   const sr = originalBuffer.sampleRate;
-  const previewSecs = Math.min(3, originalBuffer.duration);
   const previewLen = Math.floor(sr * previewSecs);
   const ch = originalBuffer.numberOfChannels;
   const previewBuf = ctx.createBuffer(ch, previewLen, sr);
@@ -1048,7 +1102,7 @@ async function playPreview() {
   if (currentSource) {
     currentSource.onended = () => {
       btn.classList.remove('playing');
-      btn.textContent = '🎮 試し聴き（3秒プレビュー）';
+      btn.textContent = '🎮 試し聴き';
       document.getElementById('vizLed').classList.remove('active');
       stopViz();
     };
@@ -1081,9 +1135,9 @@ async function startConvert() {
 
   document.getElementById('playChipBtn').disabled = false;
   document.getElementById('stopBtn').disabled = false;
-  const dlBtn = document.getElementById('downloadBtn');
-  dlBtn.classList.add('show');
-  dlBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const dlSection = document.getElementById('downloadSection');
+  dlSection.classList.add('show');
+  dlSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
   addLog('⬇ ダウンロードボタンが有効になりました！');
 
   showProgress(false);
@@ -1142,9 +1196,11 @@ function chiptuneChannel(input, output, params) {
   // 3. モード別処理
   let processed;
   switch(mode) {
-    case 'nes': processed = processNES(crushed, sr, squareMix, noiseMix); break;
-    case 'gb': processed = processGB(crushed, sr, squareMix, noiseMix); break;
-    case 'snes': processed = processSNES(crushed, sr, squareMix, noiseMix); break;
+    case 'nes':    processed = processNES(crushed, sr, squareMix, noiseMix); break;
+    case 'gb':     processed = processGB(crushed, sr, squareMix, noiseMix); break;
+    case 'snes':   processed = processSNES(crushed, sr, squareMix, noiseMix); break;
+    case 'konami': processed = processKonami(crushed, sr, squareMix, noiseMix); break;
+    default:       processed = crushed;
   }
 
   // 4. ビブラート
@@ -1219,6 +1275,63 @@ function processSNES(signal, sr, squareMix, noiseMix) {
     const sq = ((i % Math.round(sr/880)) < Math.round(sr/1760)) ? 0.1 : -0.1;
     const noise = (Math.random() * 2 - 1) * 0.05;
     out[i] = brr * 0.8 + chorus + sq * squareMix * 0.2 + noise * noiseMix * 0.15;
+  }
+  return out;
+}
+
+// ===== KONAMI風 MSX/PSG処理 =====
+function processKonami(signal, sr, squareMix, noiseMix) {
+  const len = signal.length;
+  const out = new Float32Array(len);
+
+  // PSG AY-3-8910風: 矩形波3和音アルペジオ
+  // アルペジオ周波数（ルート・長3度・5度）
+  const baseFreq = 440;
+  const freqs = [baseFreq, baseFreq * 1.26, baseFreq * 1.5];
+  const arpeggioRate = Math.floor(sr / 32); // 約32Hzでコード切り替え
+  const periods = freqs.map(f => Math.round(sr / f));
+
+  // PSG 4bit音量テーブル（対数スケール）
+  const volTable = [0,0.01,0.013,0.018,0.025,0.034,0.046,0.064,0.088,0.122,0.169,0.234,0.324,0.448,0.621,1.0];
+
+  // ピッチLFO（コナミ特有の揺らぎ）
+  const lfoRate = 5.5;
+  const lfoDepth = 0.018;
+
+  // リングモジュレーション用キャリア
+  const ringFreq = 880;
+  const ringPeriod = Math.round(sr / ringFreq);
+
+  for (let i = 0; i < len; i++) {
+    // アルペジオ: 16分音符ごとにコード構成音を切り替え
+    const arpIdx = Math.floor(i / arpeggioRate) % 3;
+    const period = periods[arpIdx];
+
+    // 矩形波（PSG 50%デューティ）
+    const sq = ((i % period) < period * 0.5) ? 1 : -1;
+
+    // ピッチLFO（ビブラート）
+    const lfo = Math.sin((2 * Math.PI * lfoRate * i) / sr) * lfoDepth;
+    const pitchShiftedSq = sq * (1 + lfo);
+
+    // 4bitPSG量子化（音量を16段階に）
+    const volIdx = Math.min(15, Math.floor(Math.abs(signal[i]) * 15.99));
+    const vol = volTable[volIdx] * Math.sign(signal[i]);
+
+    // リングモジュレーション（コナミ特有のメタリックな音）
+    const ring = ((i % ringPeriod) < ringPeriod * 0.5) ? 1 : -1;
+    const ringMod = vol * ring * 0.15 * squareMix;
+
+    // ハードサチュレーション（アーケード基板の歪み）
+    const saturated = hardClip(signal[i] * 2.2, 0.85);
+
+    // PSGノイズ（周期的なバーストノイズ）
+    const noiseBurst = (Math.floor(i / 512) % 7 === 0) ? (Math.random() * 2 - 1) * 0.4 : 0;
+
+    out[i] = saturated * (1 - squareMix * 0.4)
+           + pitchShiftedSq * Math.abs(signal[i]) * squareMix * 0.55
+           + ringMod
+           + noiseBurst * noiseMix * 0.3;
   }
   return out;
 }
@@ -1308,7 +1421,7 @@ function stopAll() {
   }
   document.querySelectorAll('.play-btn').forEach(b => b.classList.remove('playing'));
   const pb = document.getElementById('previewBtn');
-  if (pb) { pb.classList.remove('playing'); pb.textContent = '🎮 試し聴き（3秒プレビュー）'; }
+  if (pb) { pb.classList.remove('playing'); pb.textContent = '🎮 試し聴き'; }
   document.getElementById('vizLed').classList.remove('active');
   stopViz();
 }
@@ -1398,30 +1511,153 @@ function resetChannelBars() {
   document.querySelectorAll('.channel-bar').forEach(b => b.style.height = '0%');
 }
 
-// ===== ダウンロード (WAV) =====
+// ===== ダウンロード形式 =====
+let currentFmt = 'wav';
+
+function setFmt(fmt) {
+  currentFmt = fmt;
+  document.querySelectorAll('.fmt-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('fmt-' + fmt).classList.add('active');
+  const labels = { wav: '⬇ WAVダウンロード', mp3: '⬇ MP3風WAVダウンロード', midi: '⬇ MIDIダウンロード' };
+  document.getElementById('downloadBtn').textContent = labels[fmt] || '⬇ ダウンロード';
+}
+
 function downloadAudio() {
   if (!chiptunedBuffer) { addLog('✗ 先に変換してください', true); return; }
-  addLog('⏳ WAV生成中...');
+  if (currentFmt === 'midi') { downloadMidi(); return; }
+  addLog(`⏳ ${currentFmt.toUpperCase()} 生成中...`);
   setTimeout(() => {
     try {
-      const wav = bufferToWav(chiptunedBuffer);
-      const blob = new Blob([wav], { type: 'audio/wav' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `chiptune_${currentMode}_${Date.now()}.wav`;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 1000);
+      // MP3風WAV: サンプルレートを22050Hzに下げてチップチューン感を強調
+      let buf = chiptunedBuffer;
+      let sampleRate = buf.sampleRate;
+      let ext = 'wav', mime = 'audio/wav';
+
+      if (currentFmt === 'mp3') {
+        // ダウンサンプル + ローパスで「MP3圧縮風」のWAVを生成
+        sampleRate = 22050;
+        const ratio = buf.sampleRate / sampleRate;
+        const newLen = Math.floor(buf.length / ratio);
+        const tmpCtx = new OfflineAudioContext(buf.numberOfChannels, newLen, sampleRate);
+        const src = tmpCtx.createBufferSource();
+        src.buffer = buf;
+        src.connect(tmpCtx.destination);
+        src.start();
+        tmpCtx.startRendering().then(rendered => {
+          const wav = bufferToWav(rendered);
+          triggerDownload(new Blob([wav], {type:'audio/wav'}), `chiptune_${currentMode}_mp3style.wav`);
+          addLog('✓ MP3風WAVダウンロード開始！');
+        });
+        return;
+      }
+
+      const wav = bufferToWav(buf);
+      triggerDownload(new Blob([wav], {type: mime}), `chiptune_${currentMode}.${ext}`);
       addLog('✓ WAVダウンロード開始！');
     } catch(e) {
       addLog('✗ ダウンロードエラー: ' + e.message, true);
     }
   }, 50);
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+}
+
+// ===== MIDI生成 =====
+function downloadMidi() {
+  if (!chiptunedBuffer) return;
+  addLog('⏳ MIDI生成中...');
+  try {
+    const midi = bufferToMidi(chiptunedBuffer);
+    triggerDownload(new Blob([midi], {type: 'audio/midi'}), `chiptune_${currentMode}.mid`);
+    addLog('✓ MIDIダウンロード開始！（チップチューン特性をMIDIに変換）');
+  } catch(e) {
+    addLog('✗ MIDIエラー: ' + e.message, true);
+  }
+}
+
+function bufferToMidi(buffer) {
+  // ピーク検出でノートオン/オフを生成するシンプルなMIDI変換
+  const sr = buffer.sampleRate;
+  const data = buffer.getChannelData(0);
+  const len = data.length;
+
+  // チャンクサイズ（1/32音符相当）でRMS検出
+  const chunkSize = Math.floor(sr / 32);
+  const notes = [];
+  const minNote = 48, maxNote = 84; // C3〜C6
+
+  let prevRms = 0;
+  for (let i = 0; i < len; i += chunkSize) {
+    let sum = 0;
+    const end = Math.min(i + chunkSize, len);
+    for (let j = i; j < end; j++) sum += data[j] * data[j];
+    const rms = Math.sqrt(sum / (end - i));
+
+    // RMSから音程を推定（高音量=高音）
+    const noteNum = Math.round(minNote + rms * (maxNote - minNote));
+    const velocity = Math.min(127, Math.round(rms * 400));
+    const tick = Math.floor(i / chunkSize);
+
+    if (velocity > 8) {
+      notes.push({ tick, note: noteNum, velocity, on: true });
+      notes.push({ tick: tick + 1, note: noteNum, velocity: 0, on: false });
+    }
+    prevRms = rms;
+  }
+
+  // SMFフォーマット0生成
+  const tempo = 500000; // 120BPM
+  const tpq = 32; // ticks per quarter note
+
+  const trackEvents = [];
+  // テンポ設定
+  trackEvents.push([0, [0xFF,0x51,0x03,(tempo>>16)&0xFF,(tempo>>8)&0xFF,tempo&0xFF]]);
+  // プログラムチェンジ（コナミ風=矩形波=8番 Lead1 Square）
+  const prog = currentMode === 'konami' ? 7 : currentMode === 'gb' ? 80 : currentMode === 'snes' ? 48 : 80;
+  trackEvents.push([0, [0xC0, prog]]);
+
+  notes.forEach(({tick, note, velocity}) => {
+    const status = velocity > 0 ? 0x90 : 0x80;
+    trackEvents.push([tick, [status, Math.max(0,Math.min(127,note)), Math.max(0,Math.min(127,velocity))]]);
+  });
+  trackEvents.sort((a,b) => a[0]-b[0]);
+
+  // デルタタイム付きイベント列
+  const evBytes = [];
+  let lastTick = 0;
+  trackEvents.forEach(([tick, ev]) => {
+    const delta = tick - lastTick;
+    lastTick = tick;
+    // VLQ encode delta
+    let val = delta, vlq = [];
+    vlq.unshift(val & 0x7F); val >>= 7;
+    while (val > 0) { vlq.unshift((val & 0x7F) | 0x80); val >>= 7; }
+    vlq.forEach(b => evBytes.push(b));
+    ev.forEach(b => evBytes.push(b));
+  });
+  // End of track
+  [0,0xFF,0x2F,0x00].forEach(b => evBytes.push(b));
+
+  // ヘッダー + トラックチャンク
+  const trackLen = evBytes.length;
+  const buf = new ArrayBuffer(14 + 8 + trackLen);
+  const v = new DataView(buf);
+  // MThd
+  [0x4D,0x54,0x68,0x64].forEach((b,i)=>v.setUint8(i,b));
+  v.setUint32(4, 6);
+  v.setUint16(8, 0); v.setUint16(10, 1); v.setUint16(12, tpq);
+  // MTrk
+  [0x4D,0x54,0x72,0x6B].forEach((b,i)=>v.setUint8(14+i,b));
+  v.setUint32(18, trackLen);
+  evBytes.forEach((b,i)=>v.setUint8(22+i,b));
+  return buf;
 }
 
 function bufferToWav(buffer) {
