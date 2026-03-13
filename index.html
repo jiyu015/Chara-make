@@ -1280,58 +1280,115 @@ function processSNES(signal, sr, squareMix, noiseMix) {
 }
 
 // ===== KONAMI風 MSX/PSG処理 =====
+// 方針: 自己相関でピッチ追跡 → 元信号をほぼ捨てて矩形波で再合成
 function processKonami(signal, sr, squareMix, noiseMix) {
   const len = signal.length;
   const out = new Float32Array(len);
 
-  // PSG AY-3-8910風: 矩形波3和音アルペジオ
-  // アルペジオ周波数（ルート・長3度・5度）
-  const baseFreq = 440;
-  const freqs = [baseFreq, baseFreq * 1.26, baseFreq * 1.5];
-  const arpeggioRate = Math.floor(sr / 32); // 約32Hzでコード切り替え
-  const periods = freqs.map(f => Math.round(sr / f));
+  // --- パラメータ ---
+  // PSG AY-3-8910: 60Hzフレーム単位でピッチ更新
+  const frameSize = Math.floor(sr / 60);
+  // 自己相関の探索範囲: 80Hz〜2000Hz
+  const minPeriod = Math.floor(sr / 2000);
+  const maxPeriod = Math.floor(sr / 80);
+  // PSG 4bit対数音量テーブル
+  const volTable = [0,0.01,0.013,0.018,0.025,0.034,0.046,0.064,
+                    0.088,0.122,0.169,0.234,0.324,0.448,0.621,1.0];
+  // アルペジオ: MSXは1フレーム=1音、3フレームで1コード
+  // 長調3和音の比率（根音:長3度:5度）
+  const arpRatios = [1.0, 1.2599, 1.4983]; // 等温律
+  const arpFrames = 2; // 2フレームごとに音を切り替え
 
-  // PSG 4bit音量テーブル（対数スケール）
-  const volTable = [0,0.01,0.013,0.018,0.025,0.034,0.046,0.064,0.088,0.122,0.169,0.234,0.324,0.448,0.621,1.0];
+  // --- ピッチ追跡（自己相関法）---
+  const numFrames = Math.ceil(len / frameSize);
+  const pitches = new Float32Array(numFrames);
+  const energies = new Float32Array(numFrames);
 
-  // ピッチLFO（コナミ特有の揺らぎ）
-  const lfoRate = 5.5;
-  const lfoDepth = 0.018;
+  for (let f = 0; f < numFrames; f++) {
+    const start = f * frameSize;
+    const end = Math.min(start + frameSize, len);
+    // フレームRMS
+    let rms = 0;
+    for (let i = start; i < end; i++) rms += signal[i] * signal[i];
+    energies[f] = Math.sqrt(rms / (end - start));
 
-  // リングモジュレーション用キャリア
-  const ringFreq = 880;
-  const ringPeriod = Math.round(sr / ringFreq);
+    // 自己相関でピッチ検出
+    let bestPeriod = 0, bestCorr = -1;
+    for (let p = minPeriod; p <= maxPeriod; p++) {
+      let corr = 0, norm = 0;
+      const limit = Math.min(end - start, frameSize / 2);
+      for (let i = 0; i < limit; i++) {
+        const si = start + i, sip = si + p;
+        if (sip >= len) break;
+        corr += signal[si] * signal[sip];
+        norm += signal[si] * signal[si] + signal[sip] * signal[sip];
+      }
+      const normCorr = norm > 0 ? (2 * corr) / norm : 0;
+      if (normCorr > bestCorr) { bestCorr = normCorr; bestPeriod = p; }
+    }
+    // 相関が低い（無声/休符）ならピッチなし
+    pitches[f] = bestCorr > 0.2 ? sr / bestPeriod : 0;
+  }
+
+  // ピッチスムージング（急変を抑える）
+  for (let f = 1; f < numFrames - 1; f++) {
+    if (pitches[f] > 0 && pitches[f-1] > 0) {
+      pitches[f] = pitches[f] * 0.6 + pitches[f-1] * 0.4;
+    }
+  }
+
+  // --- PSG矩形波再合成 ---
+  let squarePhase = 0;
+  // エンベロープ用（アタック/ディケイをフレーム間で追跡）
+  let envVol = 0;
 
   for (let i = 0; i < len; i++) {
-    // アルペジオ: 16分音符ごとにコード構成音を切り替え
-    const arpIdx = Math.floor(i / arpeggioRate) % 3;
-    const period = periods[arpIdx];
+    const f = Math.floor(i / frameSize);
+    const pitch = pitches[Math.min(f, numFrames-1)];
+    const energy = energies[Math.min(f, numFrames-1)];
 
-    // 矩形波（PSG 50%デューティ）
-    const sq = ((i % period) < period * 0.5) ? 1 : -1;
+    // 4bit PSG音量（対数スケール）
+    const volIdx = Math.min(15, Math.round(energy * 22));
+    const targetVol = volTable[volIdx];
+    // エンベロープ追従（アタック速め、ディケイ遅め）
+    envVol += (targetVol - envVol) * (targetVol > envVol ? 0.15 : 0.04);
 
-    // ピッチLFO（ビブラート）
-    const lfo = Math.sin((2 * Math.PI * lfoRate * i) / sr) * lfoDepth;
-    const pitchShiftedSq = sq * (1 + lfo);
+    let sample = 0;
 
-    // 4bitPSG量子化（音量を16段階に）
-    const volIdx = Math.min(15, Math.floor(Math.abs(signal[i]) * 15.99));
-    const vol = volTable[volIdx] * Math.sign(signal[i]);
+    if (pitch > 0 && envVol > 0.005) {
+      // アルペジオ: arpFrames毎にコード構成音を切り替え
+      const arpIdx = Math.floor(f / arpFrames) % 3;
+      const freq = pitch * arpRatios[arpIdx];
 
-    // リングモジュレーション（コナミ特有のメタリックな音）
-    const ring = ((i % ringPeriod) < ringPeriod * 0.5) ? 1 : -1;
-    const ringMod = vol * ring * 0.15 * squareMix;
+      // 矩形波位相更新（squareMixでデューティ比を変化させる）
+      const duty = 0.5 - squareMix * 0.25; // 25%〜50%デューティ
+      squarePhase += freq / sr;
+      if (squarePhase >= 1.0) squarePhase -= 1.0;
+      const sq1 = squarePhase < duty ? 1.0 : -1.0;
 
-    // ハードサチュレーション（アーケード基板の歪み）
-    const saturated = hardClip(signal[i] * 2.2, 0.85);
+      // サブ矩形波（1オクターブ上、薄くブレンド）
+      const sq2phase = (squarePhase * 2) % 1.0;
+      const sq2 = sq2phase < 0.5 ? 0.3 : -0.3;
 
-    // PSGノイズ（周期的なバーストノイズ）
-    const noiseBurst = (Math.floor(i / 512) % 7 === 0) ? (Math.random() * 2 - 1) * 0.4 : 0;
+      // PSGノイズチャンネル（noiseMixで量調整）
+      // コナミ風: 周期的LFSRノイズ（打楽器的）
+      const noisePeriod = 32;
+      const noiseGate = (Math.floor(i / noisePeriod) % 16 < 3) ? 1 : 0;
+      const noise = noiseGate * (Math.random() * 2 - 1) * noiseMix * 0.35;
 
-    out[i] = saturated * (1 - squareMix * 0.4)
-           + pitchShiftedSq * Math.abs(signal[i]) * squareMix * 0.55
-           + ringMod
-           + noiseBurst * noiseMix * 0.3;
+      // PSGハードウェアの出力は矩形波のみ（元信号を捨てる）
+      sample = (sq1 + sq2) * envVol * 0.55 + noise * envVol;
+
+      // squareMix低い時は元信号を少し混ぜてブリッジ感
+      sample += signal[i] * (1 - squareMix) * 0.15;
+
+    } else {
+      // 無声区間: PSGノイズのみ（休符のシャー音）
+      const silenceNoise = noiseMix > 0.1 ? (Math.random() * 2 - 1) * noiseMix * 0.04 : 0;
+      sample = silenceNoise;
+    }
+
+    out[i] = Math.max(-1, Math.min(1, sample));
   }
   return out;
 }
