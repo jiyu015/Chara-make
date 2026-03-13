@@ -1,92 +1,1469 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>Random Pixel Character</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CHIPTUNE CONVERTER / チップチューン変換機</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap');
 
-body{
-font-family:sans-serif;
-text-align:center;
-background:#eee;
-}
+  :root {
+    --nes-red: #E40058;
+    --nes-gold: #FFD700;
+    --nes-blue: #1A0AFF;
+    --gb-green: #8BAC0F;
+    --gb-dark: #0F380F;
+    --snes-purple: #7B00FF;
+    --snes-cyan: #00FFFF;
+    --bg: #0a0a0a;
+    --scanline: rgba(0,0,0,0.15);
+    --pixel: 2px;
+  }
 
-.character{
-position:relative;
-width:128px;
-height:128px;
-margin:auto;
-image-rendering:pixelated;
-}
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-.character img{
-position:absolute;
-width:128px;
-height:128px;
-left:0;
-top:0;
-image-rendering:pixelated;
-}
+  body {
+    background: var(--bg);
+    color: #fff;
+    font-family: 'Press Start 2P', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
 
-button{
-font-size:18px;
-padding:10px 20px;
-margin-top:20px;
-}
+  /* スキャンライン */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px, transparent 3px,
+      var(--scanline) 3px, var(--scanline) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
 
+  /* ブラウン管グロー */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  /* ピクセルアニメ背景 */
+  .bg-grid {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,215,0,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,215,0,0.03) 1px, transparent 1px);
+    background-size: 32px 32px;
+    animation: gridScroll 20s linear infinite;
+    z-index: 0;
+  }
+
+  @keyframes gridScroll {
+    from { transform: translateY(0); }
+    to { transform: translateY(32px); }
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 16px;
+  }
+
+  /* ヘッダー */
+  .header {
+    text-align: center;
+    margin-bottom: 40px;
+    padding: 32px;
+    border: 4px solid var(--nes-gold);
+    image-rendering: pixelated;
+    position: relative;
+    background: rgba(255,215,0,0.03);
+    box-shadow: 0 0 40px rgba(255,215,0,0.15), inset 0 0 40px rgba(255,215,0,0.03);
+  }
+
+  .header::before, .header::after {
+    content: '★';
+    position: absolute;
+    top: 8px;
+    font-size: 12px;
+    color: var(--nes-gold);
+    animation: blink 1s step-end infinite;
+  }
+  .header::before { left: 12px; }
+  .header::after { right: 12px; }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  .header h1 {
+    font-size: clamp(12px, 3vw, 20px);
+    color: var(--nes-gold);
+    text-shadow: 0 0 20px var(--nes-gold), 3px 3px 0 #000;
+    letter-spacing: 2px;
+    line-height: 1.6;
+    animation: titlePulse 3s ease-in-out infinite;
+  }
+
+  @keyframes titlePulse {
+    0%, 100% { text-shadow: 0 0 20px var(--nes-gold), 3px 3px 0 #000; }
+    50% { text-shadow: 0 0 40px var(--nes-gold), 0 0 80px rgba(255,215,0,0.5), 3px 3px 0 #000; }
+  }
+
+  .header .subtitle {
+    font-size: 9px;
+    color: #fff;
+    margin-top: 12px;
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    letter-spacing: 3px;
+    opacity: 0.7;
+  }
+
+  /* アップロードエリア */
+  .upload-zone {
+    border: 4px dashed rgba(255,215,0,0.4);
+    padding: 32px;
+    text-align: center;
+    margin-bottom: 32px;
+    cursor: pointer;
+    transition: all 0.1s;
+    position: relative;
+    background: rgba(0,0,0,0.5);
+  }
+
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--nes-gold);
+    background: rgba(255,215,0,0.05);
+    box-shadow: 0 0 30px rgba(255,215,0,0.2);
+  }
+
+  .upload-zone .upload-icon {
+    font-size: 40px;
+    margin-bottom: 16px;
+    display: block;
+    animation: bounce 2s ease-in-out infinite;
+  }
+
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+
+  .upload-zone p {
+    font-size: 8px;
+    color: rgba(255,255,255,0.7);
+    line-height: 2;
+  }
+
+  .upload-zone .filename {
+    font-size: 10px;
+    color: var(--nes-gold);
+    margin-top: 8px;
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+  }
+
+  #fileInput { display: none; }
+
+  /* モード選択 */
+  .mode-selector {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .mode-btn {
+    border: 4px solid transparent;
+    padding: 16px 8px;
+    cursor: pointer;
+    text-align: center;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    transition: all 0.05s;
+    position: relative;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    line-height: 1.8;
+    user-select: none;
+    image-rendering: pixelated;
+  }
+
+  .mode-btn:active { transform: translate(2px, 2px); }
+
+  .mode-btn .mode-icon {
+    display: block;
+    font-size: 28px;
+    margin-bottom: 8px;
+  }
+
+  .mode-btn.nes {
+    border-color: var(--nes-red);
+    box-shadow: 4px 4px 0 var(--nes-red);
+    color: var(--nes-red);
+  }
+  .mode-btn.nes:hover, .mode-btn.nes.active {
+    background: var(--nes-red);
+    color: #fff;
+    box-shadow: 0 0 20px var(--nes-red);
+  }
+
+  .mode-btn.gb {
+    border-color: var(--gb-green);
+    box-shadow: 4px 4px 0 var(--gb-green);
+    color: var(--gb-green);
+  }
+  .mode-btn.gb:hover, .mode-btn.gb.active {
+    background: var(--gb-green);
+    color: var(--gb-dark);
+    box-shadow: 0 0 20px var(--gb-green);
+  }
+
+  .mode-btn.snes {
+    border-color: var(--snes-purple);
+    box-shadow: 4px 4px 0 var(--snes-purple);
+    color: var(--snes-purple);
+  }
+  .mode-btn.snes:hover, .mode-btn.snes.active {
+    background: var(--snes-purple);
+    color: #fff;
+    box-shadow: 0 0 20px var(--snes-purple);
+  }
+
+  /* スペック表示 */
+  .specs-panel {
+    background: rgba(0,0,0,0.7);
+    border: 2px solid rgba(255,255,255,0.1);
+    padding: 16px;
+    margin-bottom: 24px;
+    display: none;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+  }
+
+  .specs-panel.show { display: block; }
+
+  .specs-title {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+  }
+
+  .spec-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+    opacity: 0.8;
+  }
+
+  .spec-val { color: var(--nes-gold); }
+
+  /* コントロール */
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .control-group {
+    background: rgba(0,0,0,0.5);
+    border: 2px solid rgba(255,255,255,0.1);
+    padding: 16px;
+  }
+
+  .control-group label {
+    display: block;
+    font-size: 7px;
+    margin-bottom: 10px;
+    color: rgba(255,255,255,0.6);
+  }
+
+  .pixel-slider {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 8px;
+    background: rgba(255,255,255,0.1);
+    outline: none;
+    cursor: pointer;
+    border: 2px solid rgba(255,255,255,0.2);
+    image-rendering: pixelated;
+  }
+
+  .pixel-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--nes-gold);
+    cursor: pointer;
+    border: 2px solid #000;
+    image-rendering: pixelated;
+  }
+
+  .slider-val {
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    color: var(--nes-gold);
+    margin-top: 4px;
+    display: block;
+  }
+
+  /* 試し聴きボタン */
+  .preview-btn {
+    width: 100%;
+    padding: 14px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    border: 3px solid var(--snes-cyan);
+    background: rgba(0,255,255,0.05);
+    color: var(--snes-cyan);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.05s;
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+    display: block;
+  }
+  .preview-btn:hover {
+    background: rgba(0,255,255,0.15);
+    box-shadow: 0 0 20px rgba(0,255,255,0.3);
+  }
+  .preview-btn:active { transform: translate(2px,2px); }
+  .preview-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .preview-btn.playing {
+    border-color: #0f0;
+    color: #0f0;
+    background: rgba(0,255,0,0.08);
+    box-shadow: 0 0 16px rgba(0,255,0,0.3);
+    animation: blip 0.5s step-end infinite;
+  }
+  @media (max-width: 600px) {
+    .preview-btn { font-size: 7px; padding: 12px; }
+  }
+
+  /* 変換ボタン */
+  .convert-btn {
+    width: 100%;
+    padding: 20px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    border: none;
+    cursor: pointer;
+    background: var(--nes-gold);
+    color: #000;
+    letter-spacing: 2px;
+    position: relative;
+    box-shadow: 6px 6px 0 rgba(255,215,0,0.3);
+    transition: all 0.05s;
+    margin-bottom: 24px;
+    display: block;
+    text-transform: uppercase;
+  }
+
+  .convert-btn:hover {
+    box-shadow: 8px 8px 0 rgba(255,215,0,0.3), 0 0 30px rgba(255,215,0,0.4);
+  }
+
+  .convert-btn:active {
+    transform: translate(4px, 4px);
+    box-shadow: 2px 2px 0 rgba(255,215,0,0.3);
+  }
+
+  .convert-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* ビジュアライザー */
+  .visualizer-wrap {
+    background: #000;
+    border: 4px solid rgba(255,255,255,0.1);
+    padding: 8px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .visualizer-label {
+    font-size: 7px;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .led {
+    width: 8px;
+    height: 8px;
+    background: #333;
+    display: inline-block;
+  }
+
+  .led.active {
+    background: #0f0;
+    box-shadow: 0 0 6px #0f0;
+    animation: ledBlink 0.5s step-end infinite;
+  }
+
+  @keyframes ledBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  canvas { width: 100%; display: block; image-rendering: pixelated; }
+
+  /* チャンネルメーター */
+  .channels {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    margin-bottom: 24px;
+  }
+
+  .channel {
+    background: rgba(0,0,0,0.7);
+    border: 2px solid rgba(255,255,255,0.1);
+    padding: 8px 4px;
+    text-align: center;
+  }
+
+  .channel-name {
+    font-size: 6px;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  .channel-bar-wrap {
+    height: 60px;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .channel-bar {
+    width: 100%;
+    background: #0f0;
+    transition: height 0.05s;
+    height: 0%;
+    box-shadow: 0 0 4px #0f0;
+    image-rendering: pixelated;
+  }
+
+  /* 再生コントロール */
+  .playback {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .play-btn {
+    flex: 1;
+    min-width: 80px;
+    padding: 12px 8px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    border: 3px solid rgba(255,255,255,0.2);
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.05s;
+    text-align: center;
+  }
+
+  .play-btn:hover {
+    border-color: var(--nes-gold);
+    color: var(--nes-gold);
+    box-shadow: 0 0 10px rgba(255,215,0,0.2);
+  }
+
+  .play-btn:active { transform: translate(2px, 2px); }
+  .play-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .play-btn.playing {
+    border-color: #0f0;
+    color: #0f0;
+    box-shadow: 0 0 10px rgba(0,255,0,0.3);
+  }
+
+  /* ダウンロード */
+  .download-btn {
+    display: none;
+    width: 100%;
+    padding: 16px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    border: 3px solid var(--gb-green);
+    background: rgba(0,0,0,0.7);
+    color: var(--gb-green);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.05s;
+    letter-spacing: 2px;
+  }
+
+  .download-btn.show { display: block; }
+  .download-btn:hover {
+    background: var(--gb-green);
+    color: #000;
+    box-shadow: 0 0 20px rgba(139,172,15,0.4);
+  }
+
+  /* プログレスバー */
+  .progress-wrap {
+    height: 12px;
+    background: rgba(0,0,0,0.5);
+    border: 2px solid rgba(255,255,255,0.1);
+    margin-bottom: 8px;
+    position: relative;
+    overflow: hidden;
+    display: none;
+  }
+
+  .progress-wrap.show { display: block; }
+
+  .progress-bar {
+    height: 100%;
+    background: var(--nes-gold);
+    width: 0%;
+    transition: width 0.1s;
+    box-shadow: 0 0 10px rgba(255,215,0,0.5);
+    image-rendering: pixelated;
+  }
+
+  .progress-text {
+    font-size: 7px;
+    color: rgba(255,255,255,0.5);
+    text-align: center;
+    margin-bottom: 16px;
+    display: none;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+  }
+
+  .progress-text.show { display: block; }
+
+  /* フッター */
+  .footer {
+    text-align: center;
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 2px solid rgba(255,255,255,0.1);
+    font-size: 7px;
+    color: rgba(255,255,255,0.3);
+    line-height: 2.5;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+  }
+
+  /* ピクセルコーナー装飾 */
+  .pixel-corner {
+    position: relative;
+  }
+
+  .pixel-corner::before {
+    content: '';
+    position: absolute;
+    top: -4px; left: -4px;
+    width: 8px; height: 8px;
+    background: var(--nes-gold);
+  }
+
+  /* モバイル対応 */
+  @media (max-width: 600px) {
+    body { font-size: 10px; }
+
+    .container { padding: 12px 10px; }
+
+    .header {
+      padding: 20px 12px;
+      margin-bottom: 20px;
+    }
+    .header h1 { font-size: 9px; letter-spacing: 1px; }
+    .header .subtitle { font-size: 14px; letter-spacing: 1px; }
+
+    .upload-zone {
+      padding: 20px 12px;
+      margin-bottom: 20px;
+    }
+    .upload-zone .upload-icon { font-size: 28px; margin-bottom: 10px; }
+    .upload-zone p { font-size: 7px; }
+    .upload-zone .filename { font-size: 16px; }
+
+    .mode-selector {
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .mode-btn {
+      padding: 12px 8px;
+      font-size: 7px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-align: left;
+    }
+    .mode-btn .mode-icon {
+      font-size: 22px;
+      margin-bottom: 0;
+      flex-shrink: 0;
+    }
+
+    .specs-panel { font-size: 13px; padding: 12px; margin-bottom: 16px; }
+    .specs-title { font-size: 7px; }
+    .spec-row { flex-direction: column; gap: 2px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+    .controls {
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .control-group { padding: 12px; }
+    .control-group label { font-size: 6px; margin-bottom: 8px; }
+    .pixel-slider { height: 10px; }
+    .pixel-slider::-webkit-slider-thumb { width: 22px; height: 22px; }
+    .slider-val { font-size: 16px; }
+
+    .convert-btn {
+      padding: 18px;
+      font-size: 10px;
+      margin-bottom: 16px;
+    }
+
+    .visualizer-wrap { padding: 6px; margin-bottom: 16px; }
+    .visualizer-label { font-size: 6px; }
+    canvas { height: 60px !important; }
+
+    .channels {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .channel { padding: 6px 4px; }
+    .channel-name { font-size: 6px; }
+    .channel-bar-wrap { height: 40px; }
+
+    .playback {
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .play-btn {
+      padding: 14px 6px;
+      font-size: 7px;
+      min-width: 0;
+    }
+
+    .download-btn {
+      padding: 14px;
+      font-size: 8px;
+    }
+
+    .log-panel { font-size: 13px; max-height: 60px; }
+
+    .footer { font-size: 13px; margin-top: 24px; padding-top: 16px; }
+
+    .progress-wrap { height: 10px; }
+    .progress-text { font-size: 13px; }
+  }
+
+  /* タッチデバイス向けタップ領域拡大 */
+  @media (hover: none) and (pointer: coarse) {
+    .mode-btn { min-height: 56px; }
+    .play-btn { min-height: 48px; }
+    .convert-btn { min-height: 56px; }
+    .download-btn { min-height: 52px; }
+    .pixel-slider { height: 12px; }
+    .pixel-slider::-webkit-slider-thumb { width: 28px; height: 28px; }
+  }
+
+  /* ログ表示 */
+  .log-panel {
+    background: #000;
+    border: 2px solid rgba(255,255,255,0.1);
+    padding: 12px;
+    margin-bottom: 16px;
+    max-height: 80px;
+    overflow-y: auto;
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    display: none;
+  }
+
+  .log-panel.show { display: block; }
+
+  .log-line {
+    color: rgba(0,255,0,0.8);
+    line-height: 1.4;
+  }
+
+  .log-line.err { color: rgba(255,100,100,0.8); }
+
+  /* ブリップアニメ */
+  @keyframes blip {
+    0% { opacity: 1; }
+    50% { opacity: 0.3; }
+    100% { opacity: 1; }
+  }
+
+  .processing { animation: blip 0.3s step-end infinite; }
 </style>
 </head>
-
 <body>
+<div class="bg-grid"></div>
+<div class="container">
 
-<h1>32px キャラメーカー</h1>
+  <header class="header pixel-corner">
+    <h1>CHIPTUNE CONVERTER<br>チップチューン変換機</h1>
+    <p class="subtitle">▶ NES / GAMEBOY / SNES AUDIO EMULATOR ◀</p>
+  </header>
 
-<div class="character">
+  <!-- ファイルアップロード -->
+  <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+    <span class="upload-icon">🎵</span>
+    <p>クリックまたはドラッグ＆ドロップで音楽ファイルを選択<br>
+    <small style="font-size:7px;opacity:0.5">MP3 / WAV / OGG / M4A 対応</small></p>
+    <div class="filename" id="filename">ファイル未選択</div>
+    <input type="file" id="fileInput" accept=".mp3,.wav,.ogg,.m4a,.aac,.flac,.webm,audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/m4a,audio/aac,audio/flac,audio/webm,audio/*">
+  </div>
 
-<img id="body">
-<img id="hair">
-<img id="eyes">
+  <!-- モード選択 -->
+  <div class="mode-selector">
+    <button class="mode-btn nes active" data-mode="nes" onclick="selectMode('nes', this)">
+      <span class="mode-icon">🔴</span>
+      <span>FAMICOM<br>ファミコン<br>
+      <small style="font-size:6px;opacity:0.6">2A03 / 5ch</small></span>
+    </button>
+    <button class="mode-btn gb" data-mode="gb" onclick="selectMode('gb', this)">
+      <span class="mode-icon">🟢</span>
+      <span>GAMEBOY<br>ゲームボーイ<br>
+      <small style="font-size:6px;opacity:0.6">DMG / 4ch</small></span>
+    </button>
+    <button class="mode-btn snes" data-mode="snes" onclick="selectMode('snes', this)">
+      <span class="mode-icon">🟣</span>
+      <span>SUPER NES<br>スーファミ<br>
+      <small style="font-size:6px;opacity:0.6">SPC700 / 8ch</small></span>
+    </button>
+  </div>
+
+  <!-- スペック表示 -->
+  <div class="specs-panel show" id="specsPanel">
+    <div class="specs-title" id="specsTitle">▌ FAMICOM 2A03 SPECS</div>
+    <div id="specsContent"></div>
+  </div>
+
+  <!-- 変換パラメータ -->
+  <div class="controls">
+    <div class="control-group">
+      <label>BIT CRUSH（ビット深度）</label>
+      <input type="range" class="pixel-slider" id="bitCrush" min="1" max="8" value="4" oninput="updateSlider('bitCrush','bitCrushVal',this.value+' bit')">
+      <span class="slider-val" id="bitCrushVal">4 bit</span>
+    </div>
+    <div class="control-group">
+      <label>SAMPLE RATE DOWN（サンプリング）</label>
+      <input type="range" class="pixel-slider" id="sampleDown" min="1" max="16" value="6" oninput="updateSlider('sampleDown','sampleDownVal','1/'+this.value)">
+      <span class="slider-val" id="sampleDownVal">1/6</span>
+    </div>
+    <div class="control-group">
+      <label>SQUARE WAVE MIX（矩形波）</label>
+      <input type="range" class="pixel-slider" id="squareMix" min="0" max="100" value="60" oninput="updateSlider('squareMix','squareMixVal',this.value+'%')">
+      <span class="slider-val" id="squareMixVal">60%</span>
+    </div>
+    <div class="control-group">
+      <label>NOISE MIX（ノイズ）</label>
+      <input type="range" class="pixel-slider" id="noiseMix" min="0" max="100" value="20" oninput="updateSlider('noiseMix','noiseMixVal',this.value+'%')">
+      <span class="slider-val" id="noiseMixVal">20%</span>
+    </div>
+    <div class="control-group">
+      <label>VIBRATO（ビブラート）</label>
+      <input type="range" class="pixel-slider" id="vibrato" min="0" max="100" value="30" oninput="updateSlider('vibrato','vibratoVal',this.value+'%')">
+      <span class="slider-val" id="vibratoVal">30%</span>
+    </div>
+    <div class="control-group">
+      <label>REVERB（エコー）</label>
+      <input type="range" class="pixel-slider" id="reverb" min="0" max="100" value="20" oninput="updateSlider('reverb','reverbVal',this.value+'%')">
+      <span class="slider-val" id="reverbVal">20%</span>
+    </div>
+  </div>
+
+  <!-- 変換ボタン -->
+  <button class="convert-btn" id="convertBtn" onclick="startConvert()">
+    ▶▶ CONVERT / 変換開始 ◀◀
+  </button>
+
+  <!-- プログレス -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+  <div class="progress-text" id="progressText">CONVERTING...</div>
+
+  <!-- ログ -->
+  <div class="log-panel" id="logPanel"></div>
+
+  <!-- ビジュアライザー -->
+  <div class="visualizer-wrap">
+    <div class="visualizer-label">
+      <span class="led" id="vizLed"></span>
+      WAVEFORM DISPLAY / 波形表示
+    </div>
+    <canvas id="vizCanvas" height="80"></canvas>
+  </div>
+
+  <!-- チャンネルメーター -->
+  <div class="channels" id="channelMeters"></div>
+
+  <!-- 試し聴きボタン -->
+  <button class="preview-btn" id="previewBtn" onclick="playPreview()" disabled>
+    🎮 試し聴き（3秒プレビュー）
+  </button>
+
+  <!-- 再生コントロール -->
+  <div class="playback">
+    <button class="play-btn" id="playOrigBtn" onclick="playOriginal()" disabled>▶ 原曲</button>
+    <button class="play-btn" id="playChipBtn" onclick="playChiptune()" disabled>▶ チップ音</button>
+    <button class="play-btn" id="stopBtn" onclick="stopAll()" disabled>■ 停止</button>
+  </div>
+
+  <!-- ダウンロード -->
+  <button class="download-btn" id="downloadBtn" onclick="downloadAudio()">
+    ⬇ DOWNLOAD / WAVダウンロード
+  </button>
+
+  <footer class="footer">
+    <div>CHIPTUNE CONVERTER v1.0 — Web Audio API powered</div>
+    <div>NES: 2A03 | GB: DMG-01 | SNES: SPC700 emulation</div>
+    <div>© 2024 — INSERT COIN TO CONTINUE ★</div>
+  </footer>
 
 </div>
 
-<button onclick="make()">ランダム生成</button>
-
 <script>
+// ===== STATE =====
+let audioCtx = null;
+let originalBuffer = null;
+let chiptunedBuffer = null;
+let currentSource = null;
+let currentMode = 'nes';
+let analyser = null;
+let vizAnimId = null;
+let channelAnalysers = [];
 
-const bodyParts=[
-"parts/body/body1.png",
-"parts/body/body2.png",
-"parts/body/body3.png"
-]
+// ===== SPECS =====
+const SPECS = {
+  nes: {
+    title: '▌ FAMICOM 2A03 SPECS',
+    rows: [
+      ['CPU', 'MOS 6502 @ 1.79 MHz'],
+      ['チャンネル数', '5ch (矩形波×2, 三角波×1, ノイズ×1, DPCM×1)'],
+      ['サンプルレート', '≈ 22050 Hz'],
+      ['ビット深度', '4bit (振幅制御)'],
+      ['矩形波デューティ', '12.5% / 25% / 50% / 75%'],
+      ['ノイズ', '15段階ランダムLFSR'],
+    ],
+    channels: ['SQ1', 'SQ2', 'TRI', 'NOISE', 'DPCM'],
+    color: '#E40058'
+  },
+  gb: {
+    title: '▌ GAMEBOY DMG-01 SPECS',
+    rows: [
+      ['CPU', 'Sharp LR35902 @ 4.19 MHz'],
+      ['チャンネル数', '4ch (矩形波×2, 波形×1, ノイズ×1)'],
+      ['サンプルレート', '≈ 22050 Hz'],
+      ['ビット深度', '4bit DAC'],
+      ['矩形波デューティ', '12.5% / 25% / 50% / 75%'],
+      ['波形チャンネル', '32サンプル × 4bit'],
+    ],
+    channels: ['CH1', 'CH2', 'WAVE', 'NOISE'],
+    color: '#8BAC0F'
+  },
+  snes: {
+    title: '▌ SUPER NES SPC700 SPECS',
+    rows: [
+      ['CPU', 'SPC700 @ 1.024 MHz'],
+      ['チャンネル数', '8ch (ADPCM BRR)'],
+      ['サンプルレート', '32000 Hz'],
+      ['ビット深度', '16bit (外部) / 4bit ADPCM'],
+      ['DSP', 'Echo / Reverb / Pitch modulation'],
+      ['最大サンプル', '64KB RAM'],
+    ],
+    channels: ['CH1', 'CH2', 'CH3', 'CH4', 'CH5', 'CH6', 'CH7', 'CH8'],
+    color: '#7B00FF'
+  }
+};
 
-const hairParts=[
-"parts/hair/hair1.png",
-"parts/hair/hair2.png",
-"parts/hair/hair3.png"
-]
+// ===== 初期化 =====
+function init() {
+  selectMode('nes', document.querySelector('.mode-btn.nes'));
+  drawIdleViz();
+  updateSlider('bitCrush','bitCrushVal','4 bit');
+  updateSlider('sampleDown','sampleDownVal','1/6');
+  updateSlider('squareMix','squareMixVal','60%');
+  updateSlider('noiseMix','noiseMixVal','20%');
+  updateSlider('vibrato','vibratoVal','30%');
+  updateSlider('reverb','reverbVal','20%');
 
-const eyesParts=[
-"parts/eyes/eyes1.png",
-"parts/eyes/eyes2.png",
-"parts/eyes/eyes3.png"
-]
-
-function rand(arr){
-return arr[Math.floor(Math.random()*arr.length)]
+  const uz = document.getElementById('uploadZone');
+  uz.addEventListener('dragover', e => { e.preventDefault(); uz.classList.add('dragover'); });
+  uz.addEventListener('dragleave', () => uz.classList.remove('dragover'));
+  uz.addEventListener('drop', e => {
+    e.preventDefault(); uz.classList.remove('dragover');
+    if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+  });
+  document.getElementById('fileInput').addEventListener('change', e => {
+    if(e.target.files[0]) loadFile(e.target.files[0]);
+  });
 }
 
-function make(){
-
-document.getElementById("body").src=rand(bodyParts)
-document.getElementById("hair").src=rand(hairParts)
-document.getElementById("eyes").src=rand(eyesParts)
-
+function selectMode(mode, btn) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const spec = SPECS[mode];
+  document.getElementById('specsTitle').textContent = spec.title;
+  const html = spec.rows.map(r =>
+    `<div class="spec-row"><span>${r[0]}</span><span class="spec-val">${r[1]}</span></div>`
+  ).join('');
+  document.getElementById('specsContent').innerHTML = html;
+  buildChannelMeters(spec.channels, spec.color);
 }
 
-make()
+function buildChannelMeters(names, color) {
+  const c = document.getElementById('channelMeters');
+  c.innerHTML = names.map(n => `
+    <div class="channel">
+      <span class="channel-name">${n}</span>
+      <div class="channel-bar-wrap">
+        <div class="channel-bar" style="background:${color};box-shadow:0 0 4px ${color}" id="bar_${n}"></div>
+      </div>
+    </div>
+  `).join('');
+}
 
+function updateSlider(id, valId, val) {
+  document.getElementById(valId).textContent = val;
+}
+
+// ===== ファイル読み込み (MP3/WAV/OGG/M4A対応) =====
+function loadFile(file) {
+  document.getElementById('filename').textContent = file.name;
+  addLog(`📂 読み込み中: ${file.name}...`);
+
+  if (!audioCtx) audioCtx = new AudioContext();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  // ObjectURL + fetch が MP3 含め最も互換性が高い
+  const objectURL = URL.createObjectURL(file);
+  fetch(objectURL)
+    .then(r => r.arrayBuffer())
+    .then(buf => audioCtx.decodeAudioData(buf))
+    .then(decoded => {
+      URL.revokeObjectURL(objectURL);
+      originalBuffer = decoded;
+      addLog(`✓ 読み込み完了: ${file.name} (${originalBuffer.duration.toFixed(1)}s, ${originalBuffer.sampleRate}Hz)`);
+      document.getElementById('playOrigBtn').disabled = false;
+      document.getElementById('previewBtn').disabled = false;
+    })
+    .catch(err => {
+      URL.revokeObjectURL(objectURL);
+      addLog('✗ 読み込みエラー: ' + (err.message || 'デコード失敗') + ' — Chrome/Firefoxをお試しください', true);
+    });
+}
+
+
+function addLog(msg, err = false) {
+  const panel = document.getElementById('logPanel');
+  panel.classList.add('show');
+  const line = document.createElement('div');
+  line.className = 'log-line' + (err ? ' err' : '');
+  line.textContent = msg;
+  panel.appendChild(line);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+// ===== 試し聴き（3秒プレビュー） =====
+async function playPreview() {
+  if (!originalBuffer) return;
+  const btn = document.getElementById('previewBtn');
+
+  // 再生中なら停止
+  if (btn.classList.contains('playing')) {
+    stopAll();
+    btn.classList.remove('playing');
+    btn.textContent = '🎮 試し聴き（3秒プレビュー）';
+    return;
+  }
+
+  stopAll();
+  btn.classList.add('playing');
+  btn.textContent = '⏹ 停止';
+  addLog('▶ 試し聴き中（3秒）...');
+
+  // 最初の3秒だけ切り出してチップチューン変換
+  const ctx = getAudioCtx();
+  const sr = originalBuffer.sampleRate;
+  const previewSecs = Math.min(3, originalBuffer.duration);
+  const previewLen = Math.floor(sr * previewSecs);
+  const ch = originalBuffer.numberOfChannels;
+  const previewBuf = ctx.createBuffer(ch, previewLen, sr);
+
+  const bitCrush = parseInt(document.getElementById('bitCrush').value);
+  const sampleDown = parseInt(document.getElementById('sampleDown').value);
+  const squareMix = parseInt(document.getElementById('squareMix').value) / 100;
+  const noiseMix = parseInt(document.getElementById('noiseMix').value) / 100;
+  const vibratoAmt = parseInt(document.getElementById('vibrato').value) / 100;
+  const reverbAmt = parseInt(document.getElementById('reverb').value) / 100;
+
+  for (let c = 0; c < ch; c++) {
+    const srcData = originalBuffer.getChannelData(c);
+    const sliced = srcData.slice(0, previewLen);
+    const out = previewBuf.getChannelData(c);
+    chiptuneChannel(sliced, out, {
+      mode: currentMode, bitCrush, sampleDown, squareMix, noiseMix, vibratoAmt, reverbAmt, sr
+    });
+  }
+
+  playBuffer(previewBuf, null);
+
+  // 再生終了時にボタンを戻す
+  if (currentSource) {
+    currentSource.onended = () => {
+      btn.classList.remove('playing');
+      btn.textContent = '🎮 試し聴き（3秒プレビュー）';
+      document.getElementById('vizLed').classList.remove('active');
+      stopViz();
+    };
+  }
+}
+
+
+async function startConvert() {
+  if (!originalBuffer) { addLog('✗ ファイルを先に選択してください', true); return; }
+
+  const btn = document.getElementById('convertBtn');
+  btn.disabled = true;
+  btn.textContent = 'PROCESSING...';
+  btn.classList.add('processing');
+
+  showProgress(true);
+  setProgress(0);
+  addLog(`▶ 変換開始: ${currentMode.toUpperCase()} モード`);
+
+  await sleep(50);
+  chiptunedBuffer = await chiptuneConvert(originalBuffer, currentMode);
+  await sleep(50);
+
+  setProgress(100);
+  addLog('✓ 変換完了！');
+
+  btn.disabled = false;
+  btn.textContent = '▶▶ CONVERT / 変換開始 ◀◀';
+  btn.classList.remove('processing');
+
+  document.getElementById('playChipBtn').disabled = false;
+  document.getElementById('stopBtn').disabled = false;
+  const dlBtn = document.getElementById('downloadBtn');
+  dlBtn.classList.add('show');
+  dlBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  addLog('⬇ ダウンロードボタンが有効になりました！');
+
+  showProgress(false);
+}
+
+async function chiptuneConvert(buffer, mode) {
+  const sr = buffer.sampleRate;
+  const ch = buffer.numberOfChannels;
+  const outBuffer = audioCtx.createBuffer(ch, buffer.length, sr);
+
+  const bitCrush = parseInt(document.getElementById('bitCrush').value);
+  const sampleDown = parseInt(document.getElementById('sampleDown').value);
+  const squareMix = parseInt(document.getElementById('squareMix').value) / 100;
+  const noiseMix = parseInt(document.getElementById('noiseMix').value) / 100;
+  const vibratoAmt = parseInt(document.getElementById('vibrato').value) / 100;
+  const reverbAmt = parseInt(document.getElementById('reverb').value) / 100;
+
+  const steps = buffer.numberOfChannels;
+  for (let c = 0; c < ch; c++) {
+    const input = buffer.getChannelData(c);
+    const output = outBuffer.getChannelData(c);
+    chiptuneChannel(input, output, {
+      mode, bitCrush, sampleDown, squareMix, noiseMix, vibratoAmt, reverbAmt, sr
+    });
+    setProgress(Math.round(((c + 1) / steps) * 80));
+    addLog(`  チャンネル ${c + 1}/${ch} 処理中...`);
+    await sleep(30);
+  }
+
+  setProgress(90);
+  addLog('  エコー/リバーブ処理...');
+  await sleep(30);
+
+  return outBuffer;
+}
+
+function chiptuneChannel(input, output, params) {
+  const { mode, bitCrush, sampleDown, squareMix, noiseMix, vibratoAmt, reverbAmt, sr } = params;
+  const len = input.length;
+  const levels = Math.pow(2, bitCrush);
+
+  // 1. ダウンサンプリング（ホールドアンドサンプル）
+  let held = 0;
+  const downsampled = new Float32Array(len);
+  for (let i = 0; i < len; i++) {
+    if (i % sampleDown === 0) held = input[i];
+    downsampled[i] = held;
+  }
+
+  // 2. ビットクラッシュ（量子化）
+  const crushed = new Float32Array(len);
+  for (let i = 0; i < len; i++) {
+    crushed[i] = Math.round(downsampled[i] * levels) / levels;
+  }
+
+  // 3. モード別処理
+  let processed;
+  switch(mode) {
+    case 'nes': processed = processNES(crushed, sr, squareMix, noiseMix); break;
+    case 'gb': processed = processGB(crushed, sr, squareMix, noiseMix); break;
+    case 'snes': processed = processSNES(crushed, sr, squareMix, noiseMix); break;
+  }
+
+  // 4. ビブラート
+  const vibrated = applyVibrato(processed, sr, vibratoAmt * 6, vibratoAmt * 30);
+
+  // 5. エコー（ゲームボーイ/スーファミ風）
+  const echoed = applyEcho(vibrated, sr, reverbAmt);
+
+  // 6. 最終クリップ
+  for (let i = 0; i < len; i++) {
+    output[i] = Math.max(-1, Math.min(1, echoed[i]));
+  }
+}
+
+// ===== NES 2A03 処理 =====
+function processNES(signal, sr, squareMix, noiseMix) {
+  const len = signal.length;
+  const out = new Float32Array(len);
+  // 矩形波（50%デューティ）
+  const squareFreq = 440;
+  const squarePeriod = Math.round(sr / squareFreq);
+  for (let i = 0; i < len; i++) {
+    const sq = ((i % squarePeriod) < squarePeriod * 0.5) ? 1 : -1;
+    // LFSRノイズ
+    const noise = (Math.random() > 0.5 ? 1 : -1) * 0.3;
+    // 元信号 × ハードクリップ + 矩形波ハーモニクス + ノイズ
+    const saturated = hardClip(signal[i] * 1.5, 0.9);
+    out[i] = saturated * (1 - squareMix * 0.5)
+           + sq * Math.abs(signal[i]) * squareMix * 0.6
+           + noise * Math.abs(signal[i]) * noiseMix * 0.4;
+  }
+  return out;
+}
+
+// ===== GB DMG 処理 =====
+function processGB(signal, sr, squareMix, noiseMix) {
+  const len = signal.length;
+  const out = new Float32Array(len);
+  // GB特有: 25%デューティ矩形波
+  const squarePeriod = Math.round(sr / 440);
+  for (let i = 0; i < len; i++) {
+    const sq = ((i % squarePeriod) < squarePeriod * 0.25) ? 1 : -1;
+    // 4段階量子化（4bit DAC）
+    const q4 = Math.round(signal[i] * 8) / 8;
+    // スタッタリング（GB特有の歪み）
+    const stutter = (i % 3 === 0) ? q4 * 0.9 : q4;
+    const noise = (Math.random() > 0.6 ? 0.5 : 0) * Math.sign(signal[i]);
+    out[i] = stutter * (1 - squareMix * 0.4)
+           + sq * Math.abs(signal[i]) * squareMix * 0.5
+           + noise * noiseMix * 0.3;
+  }
+  return out;
+}
+
+// ===== SNES SPC700 処理 =====
+function processSNES(signal, sr, squareMix, noiseMix) {
+  const len = signal.length;
+  const out = new Float32Array(len);
+  // SNES: より滑らか、BRR ADPCM風
+  // シンプルなローパスフィルタ（暖かみ）
+  let prev = 0;
+  const alpha = 0.3;
+  for (let i = 0; i < len; i++) {
+    const filtered = alpha * signal[i] + (1 - alpha) * prev;
+    prev = filtered;
+    // 軽いコーラス効果（SPC700 DSP）
+    const delayIdx = Math.max(0, i - Math.floor(sr * 0.01));
+    const chorus = signal[delayIdx] * 0.15;
+    // BRR圧縮風（軽いアーティファクト）
+    const brr = Math.round(filtered * 32) / 32;
+    // 矩形波（薄くブレンド）
+    const sq = ((i % Math.round(sr/880)) < Math.round(sr/1760)) ? 0.1 : -0.1;
+    const noise = (Math.random() * 2 - 1) * 0.05;
+    out[i] = brr * 0.8 + chorus + sq * squareMix * 0.2 + noise * noiseMix * 0.15;
+  }
+  return out;
+}
+
+function hardClip(x, threshold) {
+  return Math.max(-threshold, Math.min(threshold, x));
+}
+
+function applyVibrato(signal, sr, rate, depth) {
+  if (rate <= 0 || depth <= 0) return signal;
+  const len = signal.length;
+  const out = new Float32Array(len);
+  const maxDelay = Math.floor(sr * 0.005);
+  for (let i = 0; i < len; i++) {
+    const lfoPhase = (2 * Math.PI * rate * i) / sr;
+    const delay = Math.floor(maxDelay * depth / 100 * (1 + Math.sin(lfoPhase)) / 2);
+    const srcIdx = Math.max(0, i - delay);
+    out[i] = signal[i] * 0.7 + signal[srcIdx] * 0.3;
+  }
+  return out;
+}
+
+function applyEcho(signal, sr, amount) {
+  if (amount <= 0) return signal;
+  const len = signal.length;
+  const out = new Float32Array(len);
+  const delays = [
+    Math.floor(sr * 0.08),
+    Math.floor(sr * 0.16),
+    Math.floor(sr * 0.24),
+  ];
+  const gains = [0.5 * amount, 0.3 * amount, 0.15 * amount];
+  for (let i = 0; i < len; i++) {
+    out[i] = signal[i];
+    for (let d = 0; d < delays.length; d++) {
+      const di = i - delays[d];
+      if (di >= 0) out[i] += signal[di] * gains[d];
+    }
+    out[i] = Math.max(-1, Math.min(1, out[i]));
+  }
+  return out;
+}
+
+// ===== 再生 =====
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new AudioContext();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function playOriginal() {
+  if (!originalBuffer) return;
+  stopAll();
+  playBuffer(originalBuffer, 'playOrigBtn');
+}
+
+function playChiptune() {
+  if (!chiptunedBuffer) return;
+  stopAll();
+  playBuffer(chiptunedBuffer, 'playChipBtn');
+}
+
+function playBuffer(buf, btnId) {
+  const ctx = getAudioCtx();
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 256;
+  currentSource = ctx.createBufferSource();
+  currentSource.buffer = buf;
+  currentSource.connect(analyser);
+  analyser.connect(ctx.destination);
+  currentSource.start();
+  currentSource.onended = () => {
+    if (btnId) document.getElementById(btnId).classList.remove('playing');
+    document.getElementById('vizLed').classList.remove('active');
+    stopViz();
+  };
+  if (btnId) document.getElementById(btnId).classList.add('playing');
+  document.getElementById('vizLed').classList.add('active');
+  document.getElementById('stopBtn').disabled = false;
+  startViz();
+}
+
+function stopAll() {
+  if (currentSource) {
+    try { currentSource.stop(); } catch(e) {}
+    currentSource = null;
+  }
+  document.querySelectorAll('.play-btn').forEach(b => b.classList.remove('playing'));
+  const pb = document.getElementById('previewBtn');
+  if (pb) { pb.classList.remove('playing'); pb.textContent = '🎮 試し聴き（3秒プレビュー）'; }
+  document.getElementById('vizLed').classList.remove('active');
+  stopViz();
+}
+
+// ===== ビジュアライザー =====
+function startViz() {
+  if (vizAnimId) cancelAnimationFrame(vizAnimId);
+  drawViz();
+}
+
+function stopViz() {
+  if (vizAnimId) cancelAnimationFrame(vizAnimId);
+  vizAnimId = null;
+  drawIdleViz();
+  resetChannelBars();
+}
+
+function drawViz() {
+  if (!analyser) return;
+  const canvas = document.getElementById('vizCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth;
+  const W = canvas.width, H = canvas.height;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+
+  function frame() {
+    analyser.getByteTimeDomainData(data);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    const color = SPECS[currentMode].color;
+    ctx.strokeStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 4;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < data.length; i++) {
+      const x = (i / data.length) * W;
+      const y = ((data[i] / 128) - 1) * (H / 2) + H / 2;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // チャンネルバー更新（シミュレート）
+    updateChannelBars(data);
+    vizAnimId = requestAnimationFrame(frame);
+  }
+  frame();
+}
+
+function drawIdleViz() {
+  const canvas = document.getElementById('vizCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth || 800;
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(255,215,0,0.2)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, H/2);
+  ctx.lineTo(W, H/2);
+  ctx.stroke();
+  ctx.font = '10px "Press Start 2P"';
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.textAlign = 'center';
+  ctx.fillText('NO SIGNAL', W/2, H/2 + 5);
+}
+
+function updateChannelBars(data) {
+  const spec = SPECS[currentMode];
+  spec.channels.forEach((name, i) => {
+    const el = document.getElementById('bar_' + name);
+    if (!el) return;
+    const offset = Math.floor(i * data.length / spec.channels.length);
+    let sum = 0;
+    const chunk = Math.floor(data.length / spec.channels.length);
+    for (let j = 0; j < chunk; j++) {
+      sum += Math.abs(data[offset + j] - 128);
+    }
+    const avg = sum / chunk;
+    const pct = Math.min(100, (avg / 128) * 100 * 2.5);
+    el.style.height = pct + '%';
+  });
+}
+
+function resetChannelBars() {
+  document.querySelectorAll('.channel-bar').forEach(b => b.style.height = '0%');
+}
+
+// ===== ダウンロード (WAV) =====
+function downloadAudio() {
+  if (!chiptunedBuffer) { addLog('✗ 先に変換してください', true); return; }
+  addLog('⏳ WAV生成中...');
+  setTimeout(() => {
+    try {
+      const wav = bufferToWav(chiptunedBuffer);
+      const blob = new Blob([wav], { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chiptune_${currentMode}_${Date.now()}.wav`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 1000);
+      addLog('✓ WAVダウンロード開始！');
+    } catch(e) {
+      addLog('✗ ダウンロードエラー: ' + e.message, true);
+    }
+  }, 50);
+}
+
+function bufferToWav(buffer) {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const length = buffer.length;
+  const totalSamples = length * numChannels;
+  const ab = new ArrayBuffer(44 + totalSamples * 2);
+  const view = new DataView(ab);
+  const str = (s, off) => { for(let i=0;i<s.length;i++) view.setUint8(off+i, s.charCodeAt(i)); };
+  str('RIFF', 0); view.setUint32(4, 36 + totalSamples*2, true);
+  str('WAVE', 8); str('fmt ', 12);
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numChannels * 2, true);
+  view.setUint16(32, numChannels * 2, true); view.setUint16(34, 16, true);
+  str('data', 36); view.setUint32(40, totalSamples*2, true);
+  let offset = 44;
+  for (let i = 0; i < length; i++) {
+    for (let c = 0; c < numChannels; c++) {
+      const s = Math.max(-1, Math.min(1, buffer.getChannelData(c)[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+  return ab;
+}
+
+// ===== ユーティリティ =====
+function setProgress(val) {
+  document.getElementById('progressBar').style.width = val + '%';
+  document.getElementById('progressText').textContent = `CONVERTING... ${val}%`;
+}
+
+function showProgress(show) {
+  document.getElementById('progressWrap').classList[show ? 'add' : 'remove']('show');
+  document.getElementById('progressText').classList[show ? 'add' : 'remove']('show');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+init();
 </script>
-
 </body>
 </html>
